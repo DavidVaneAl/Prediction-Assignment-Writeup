@@ -145,7 +145,8 @@ Correlation Analysis
 
 First, a correlation among variables is analyzed before proceeding to
 the modeling procedures
-![](Practical-Machine-Learning-Project_files/figure-markdown_strict/unnamed-chunk-5-1.png)
+
+![plot of chunk unnamed-chunk-5-1](figure/unnamed-chunk-5-1.png)
 
 Fig. 1. Correlation plot, the highly correlated variables are shown in
 dark colors in the graph above [Appendix 1.](#appendix1).
@@ -188,7 +189,7 @@ Method: Decision Trees
     modFitDecTree <- rpart(classe ~ ., data = trainData, method = "class")
     fancyRpartPlot(modFitDecTree, cex = .7)
 
-![](Practical-Machine-Learning-Project_files/figure-markdown_strict/unnamed-chunk-8-1.png)
+![plot of chunk unnamed-chunk-8-1](figure/unnamed-chunk-8-1.png)
 
 <br>
 
@@ -239,7 +240,8 @@ performs by looking at the accuracy variable
 <br>
 
 Plot matrix results
-![](Practical-Machine-Learning-Project_files/figure-markdown_strict/unnamed-chunk-10-1.png)
+
+![plot of chunk unnamed-chunk-10-1](figure/unnamed-chunk-10-1.png)
 
 Fig. 2. Plot from Decision Trees model [Appendix 2.](#appendix2).
 
@@ -279,7 +281,8 @@ performs by looking at the accuracy variable.
 
     The accuracy from Random Forest is 0.9989805
 
-![](Practical-Machine-Learning-Project_files/figure-markdown_strict/unnamed-chunk-13-1.png)
+![plot of chunk unnamed-chunk-13-1](figure/unnamed-chunk-13-1.png)
+
 
 Fig. 3. Plot from Random Forest Model [Appendix 3.](#appendix3).
 
