@@ -1,0 +1,282 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "David Vanegas"
+date: "8/25/2020"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+---
+
+This document is the final report of the Peer Assessment project from Coursera’s course Practical Machine Learning, as part of the Specialization in Data Science.
+
+# Overview 
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+
+In this project, will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: [HUMAN ACTIVITY RECOGNITION](http://groupware.les.inf.puc-rio.br/har) (see the section on the Weight Lifting Exercise Dataset)
+
+Authors: 
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. “Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human ’13)”. Stuttgart, Germany: ACM SIGCHI, 2013
+
+<br>
+
+# Exploratory data analyses
+
+The training data for this project are available [HERE](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv)
+
+The test data are available [HERE](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv)
+
+A short description of the datasets content from the authors’ website:
+
+“Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).
+
+Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes. Participants were supervised by an experienced weight lifter to make sure the execution complied to the manner they were supposed to simulate. The exercises were performed by six male participants aged between 20-28 years, with little weight lifting experience. We made sure that all participants could easily simulate the mistakes in a safe and controlled manner by using a relatively light dumbbell (1.25kg)"
+
+<br>
+
+Loading libraries necessaries  for the complete analysis
+```{r Library, warning = FALSE, message = FALSE}
+library(knitr)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(rattle)
+library(randomForest)
+library(corrplot)
+library(gbm)
+library(e1071)
+set.seed(12345)
+```
+
+## Data Loading and Cleaning
+
+The next step is loading the dataset from the URL provided above. The training dataset is then partitioned in 2 to create a Training set (70% of the data) for the modeling process and a Test set (with the remaining 30%) for the validations. The testing dataset is not changed and will only be used for the quiz results generation.
+```{r}
+# set the URL for the download
+UrlTrain <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+UrlTest  <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+# download the datasets
+training <- read.csv(url(UrlTrain))
+testing  <- read.csv(url(UrlTest))
+
+# create a partition with the training dataset 
+inTrain  <- createDataPartition(training$classe, p = .7, list = FALSE)
+TrainSet <- training[inTrain, ]
+TestSet  <- training[-inTrain, ]
+dim1 <- dim(TrainSet)[1]
+dim(TrainSet)
+dim(TestSet)
+```
+
+
+Removing the variables that contains missing values
+```{r}
+trainData<- TrainSet[, colSums(is.na(TrainSet)) == 0]
+testData <- TestSet[, colSums(is.na(TestSet)) == 0]
+dim(trainData)
+dim(testData)
+```
+
+<br>
+
+Cleaning even further by removing the variables that are near-zero-variance 
+
+```{r}
+NZV <- nearZeroVar(trainData)
+trainData <- trainData[, -NZV]
+testData  <- testData[, -NZV]
+dim(trainData)
+dim(testData)
+```
+
+<br>
+
+```{r}
+trainData <- trainData[, -(1:5)]
+testData  <- testData[, -(1:5)]
+dim(trainData)
+testData$classe <- as.factor(testData$classe)
+```
+
+<br>
+
+# Correlation Analysis
+
+First, a correlation among variables is analyzed before proceeding to the modeling procedures
+```{r echo = FALSE, fig.width = 10, fig.height = 7}
+corMatrix <- cor(trainData[, -54])
+corrplot(corMatrix, order = "FPC", method = "color", type = "upper", 
+         tl.cex = 0.8, tl.col = rgb(0, 0, 0))
+
+```
+
+Fig. 1. Correlation plot, the highly correlated variables are shown in dark colors in the graph above [Appendix 1.](#appendix1).
+
+<br>
+
+Use the ***findCorrelation*** function to search for highly correlated attributes with a cut off equal to 0.75
+
+```{r}
+highlyCorrelated = findCorrelation(corMatrix, cutoff=0.75)
+```
+
+<br>
+
+Then, obtain the names of highly correlated attributes
+```{r}
+names(trainData)[highlyCorrelated]
+```
+
+# Prediction Model Builiding
+
+Three methods will be applied to model the regressions (in the Train dataset) and the best one (with higher accuracy when applied to the Test dataset) will be used for the quiz predictions. The methods are: Decision Tree, Random Forests and Generalized Boosted Model, as described below.
+A Confusion Matrix is plotted at the end of each analysis to better visualize the accuracy of the models
+
+## Method: Decision Trees
+
+```{r fig.width = 15, fig.height = 15}
+set.seed(12345)
+modFitDecTree <- rpart(classe ~ ., data = trainData, method = "class")
+fancyRpartPlot(modFitDecTree, cex = .7)
+```
+
+<br>
+
+Then, validate the model on the testData to find out how well it performs by looking at the accuracy variable
+
+```{r}
+predictTreeMod1 <- predict(modFitDecTree, newdata=testData, type="class")
+cmtree <- confusionMatrix(predictTreeMod1, testData$classe)
+cmtree
+DTaccuracy <- cmtree$overall[1]
+```
+
+```
+The accuracy from Decision Trees is `r DTaccuracy`
+```
+<br>
+
+Plot matrix results
+```{r echo = FALSE, fig.width = 10, fig.height = 7}
+plot(cmtree$table, col = cmtree$byClass, 
+     main = paste("Decision Tree - Accuracy =",
+                  round(cmtree$overall['Accuracy'], 4)))
+```
+
+Fig. 2. Plot from Decision Trees model [Appendix 2.](#appendix2).
+
+## Method: Random Forest
+
+```{r}
+set.seed(12345)
+controlRF <- trainControl(method = "cv", number = 3, verboseIter = FALSE)
+modFitRandForest <- train(classe ~ ., data=trainData, method = "rf",
+                          trControl = controlRF)
+modFitRandForest$finalModel
+```
+
+<br>
+
+Then, validate the model on the testData to find out how well it performs by looking at the accuracy variable.
+```{r}
+predictRandForest <- predict(modFitRandForest, newdata = testData)
+confMatRandForest <- confusionMatrix(predictRandForest, testData$classe)
+RFaccuracy <- confMatRandForest$overall[1]
+```
+
+```
+The accuracy from Random Forest is `r RFaccuracy`
+```
+
+```{r echo = FALSE, fig.width = 10, fig.height = 7}
+plot(confMatRandForest$table, col = confMatRandForest$byClass, 
+     main = paste("Random Forest - Accuracy =",
+                  round(confMatRandForest$overall['Accuracy'], 4)))
+```
+
+Fig. 3. Plot from Random Forest Model [Appendix 3.](#appendix3).
+
+## Method: Generalized Boosted Model
+```{r}
+set.seed(12345)
+controlGBM <- trainControl(method = "repeatedcv", number = 5, repeats = 1)
+modFitGBM  <- train(classe ~ ., data = trainData, method = "gbm",
+                    trControl = controlGBM, verbose = FALSE)
+modFitGBM$finalModel
+```
+
+<br>
+
+Then, validate the model on the testData to find out how well it performs by looking at the accuracy variable
+```{r}
+predictGBM <- predict(modFitGBM, newdata = testData)
+confMatGBM <- confusionMatrix(predictGBM, testData$classe)
+GBMaccuracy <- confMatGBM$overall[1]
+```
+
+```
+The accuracy from Generalized Boosted is `r GBMaccuracy`
+```
+
+```{r echo = FALSE, fig.width = 10, fig.height = 7}
+plot(confMatGBM$table, col = confMatGBM$byClass, 
+     main = paste("GBM - Accuracy =", round(confMatGBM$overall['Accuracy'], 4)))
+```
+
+Fig. 4. Plot from Generalized Boosted Model [Appendix 4.](#appendix4)
+
+<br>
+
+```
+Finally, choose the best model from the accuracy value
+
+* Decision Tree: `r DTaccuracy`
+* Random Forest: `r RFaccuracy`
+* Generalized Boosted: `r GBMaccuracy`
+
+In this case, the best model is Random Forest with `r RFaccuracy` accuracy value
+```
+
+## Applying the best model to the validation data
+
+By comparing the accuracy rate values of the three models, it is clear the the Random Forest model is the higher value. So will use it on the validation data and will be applied to predict the 20 quiz results (testing dataset) as shown below
+
+```{r}
+Results <- predict(modFitRandForest, newdata = testing)
+Results[1:20]
+```
+
+<br>
+
+# Appendix
+
+<a name="appendix1"></a>Appendix 1
+```{r eval = FALSE, fig.width = 10, fig.height =7}
+corMatrix <- cor(trainData[, -54])
+corrplot(corMatrix, order = "FPC", method = "color", type = "upper", 
+         tl.cex = 0.8, tl.col = rgb(0, 0, 0))
+
+```
+
+<a name="appendix2"></a>Appendix 2
+```{r eval = FALSE, fig.width = 10, fig.height = 7}
+plot(cmtree$table, col = cmtree$byClass, 
+     main = paste("Decision Tree - Accuracy =",
+                  round(cmtree$overall['Accuracy'], 4)))
+```
+
+<a name="appendix3"></a>Appendix 3
+```{r eval = FALSE, fig.width = 10, fig.height = 7}
+plot(confMatRandForest$table, col = confMatRandForest$byClass, 
+     main = paste("Random Forest - Accuracy =",
+                  round(confMatRandForest$overall['Accuracy'], 4)))
+```
+
+<a name="appendix4"></a>Appendix 4
+```{r eval = FALSE, fig.width = 10, fig.height = 7}
+plot(confMatGBM$table, col = confMatGBM$byClass, 
+     main = paste("GBM - Accuracy =", round(confMatGBM$overall['Accuracy'], 4)))
+```
+
